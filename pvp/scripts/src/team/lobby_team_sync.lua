@@ -387,6 +387,10 @@ local function IsPreSpawnLobbyPhase()
         return false
     end
 
+    if lobby.HasGameStarted ~= nil and lobby:HasGameStarted() then
+        return false
+    end
+
     if lobby.IsAllowingCharacterSelect ~= nil and lobby:IsAllowingCharacterSelect() then
         return true
     end

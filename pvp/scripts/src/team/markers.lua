@@ -66,7 +66,9 @@ local function should_show_icon(source, recipient)
     if source == nil
         or recipient == nil
         or source.userid == nil
-        or recipient.userid == nil then
+        or recipient.userid == nil
+        or source._bird_map_marker_ready ~= true
+        or recipient._bird_map_marker_ready ~= true then
         return false
     end
 
@@ -104,6 +106,8 @@ local function attach_icon(source, recipient)
     local existing_icon = source[key]
     if existing_icon ~= nil then
         if existing_icon:IsValid() then
+            local x, _, z = source.Transform:GetWorldPosition()
+            existing_icon.Transform:SetPosition(x, 0, z)
             return
         end
         source[key] = nil

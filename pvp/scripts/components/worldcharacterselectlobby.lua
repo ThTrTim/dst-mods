@@ -109,21 +109,23 @@ local function InstallClockPauseGuard(clock)
 
     function clock:OnUpdate(dt, ...)
         if self._bird_preselect_clock_paused then
-            return
+            -- A zero-delta update keeps shard_clock synchronized without
+            -- advancing the day while players are still in the lobby.
+            return OnUpdate(self, 0, ...)
         end
         return OnUpdate(self, dt, ...)
     end
 
     function clock:OnStaticUpdate(dt, ...)
         if self._bird_preselect_clock_paused then
-            return
+            return OnStaticUpdate(self, 0, ...)
         end
         return OnStaticUpdate(self, dt, ...)
     end
 
     function clock:LongUpdate(dt, ...)
         if self._bird_preselect_clock_paused then
-            return
+            return LongUpdate(self, 0, ...)
         end
         return LongUpdate(self, dt, ...)
     end
