@@ -3,6 +3,9 @@
 -- This runs before this mod's modmain, so with the max priority from
 -- modinfo.lua it can filter lower-priority client-only mods before their
 -- modmain.lua gets a chance to execute.
+--
+-- NOTE: This is a client-side best-effort filter. It cannot stop a user who
+-- modifies their local mod files or runs a higher-priority client mod.
 
 local _G = GLOBAL
 
@@ -58,7 +61,9 @@ local function is_blocked_client_mod(modname)
     end
 
     local modinfo = get_mod_info(modname)
-    return modinfo == nil or modinfo.client_only_mod == true
+    -- [PATCH] 修复误屏蔽：原逻辑 `modinfo == nil or client_only_mod` 会把信息缺失的正常 Mod 误判为 client-only。
+    -- 现在只在能明确判定为 client-only 时才拦截，信息缺失时放行。
+    return modinfo ~= nil and modinfo.client_only_mod == true
 end
 
 local function mark_blocked(modname, reason)

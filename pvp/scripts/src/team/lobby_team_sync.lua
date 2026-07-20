@@ -639,7 +639,16 @@ local function AutoAssignLobbyTeams(params, caller)
     for _, client in ipairs(clients) do
         if IsPlayableClientRecord(client) then
             local current_team = lobby_team_state.normalize(net._bird_lobby_teams[client.userid]) or TEAM_WAITING
-            if current_team == TEAM_WAITING or (include_all and IsPlayingTeam(current_team)) then
+            -- [PATCH] 自动分队时管理员保持当前队伍，避免管理员被随机分配到红/蓝队。
+            if admin_privileges.is_excluded_from_auto_team(client) then
+                if not include_all and IsPlayingTeam(current_team) then
+                    if current_team == TEAM_RED then
+                        red_total = red_total + 1
+                    else
+                        blue_total = blue_total + 1
+                    end
+                end
+            elseif current_team == TEAM_WAITING or (include_all and IsPlayingTeam(current_team)) then
                 players[#players + 1] = client
             elseif not include_all and current_team == TEAM_RED then
                 red_total = red_total + 1
