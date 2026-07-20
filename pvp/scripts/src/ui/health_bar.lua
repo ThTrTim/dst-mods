@@ -335,8 +335,8 @@ local function FindObserverNearEntity(entity)
 
     local x, y, z = entity.Transform:GetWorldPosition()
 
-    -- Preserved from the original. This condition is unusual and is likely a typo.
-    if not x and z then
+    -- 原条件没有分别检查 x、z，任一坐标缺失时仍可能继续执行。
+    if x == nil or z == nil then
         return
     end
 
