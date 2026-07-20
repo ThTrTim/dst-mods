@@ -335,7 +335,7 @@ local function FindObserverNearEntity(entity)
 
     local x, y, z = entity.Transform:GetWorldPosition()
 
-    -- [PATCH] 修复坐标判断：原条件 `not x and z` 在 x=0 时逻辑错误，改为显式判空。
+    -- 原条件没有分别检查 x、z，任一坐标缺失时仍可能继续执行。
     if x == nil or z == nil then
         return
     end

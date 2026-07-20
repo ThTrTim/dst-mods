@@ -217,10 +217,6 @@ local WaitingForPlayers = Class(Widget, function(self, owner, max_players)
     self.blue_title = self.proot:AddChild(Text(HEADERFONT, 30, "蓝队  0", TEAM_COLOURS[TEAM_BLUE]))
     self.blue_title:SetPosition(BLUE_COLUMN_X, TEAM_TITLE_Y)
 
-    -- [PATCH] 在大厅界面实时显示“已准备 X / Y”，方便玩家了解准备进度。
-    self.ready_count_text = self.proot:AddChild(Text(CHATFONT_OUTLINE, 24, "已准备: 0 / 0", UICOLOURS.GOLD))
-    self.ready_count_text:SetPosition(0, TEAM_TITLE_Y - 35)
-
     self.team_divider = self.proot:AddChild(Image("images/ui.xml", "line_horizontal_6.tex"))
     self.team_divider:SetScale(1.8, .25)
     self.team_divider:SetRotation(90)
@@ -432,19 +428,6 @@ function WaitingForPlayers:GetPlayerTable()
     return clients
 end
 
--- [PATCH] 根据大厅当前准备人数刷新“已准备 X / Y”文本。
-function WaitingForPlayers:RefreshReadyCount()
-    if self.ready_count_text == nil then
-        return
-    end
-    local lobby = TheWorld.net ~= nil
-        and TheWorld.net.components.worldcharacterselectlobby
-        or nil
-    local ready = lobby ~= nil and lobby.CountPlayersReadyToStart ~= nil and lobby:CountPlayersReadyToStart() or 0
-    local total = #self.players
-    self.ready_count_text:SetString("已准备: " .. tostring(ready) .. " / " .. tostring(total))
-end
-
 function WaitingForPlayers:RefreshPlayersReady()
     local lobby = TheWorld.net ~= nil
         and TheWorld.net.components.worldcharacterselectlobby
@@ -458,8 +441,6 @@ function WaitingForPlayers:RefreshPlayersReady()
             widget._playerreadytext:Hide()
         end
     end
-
-    self:RefreshReadyCount()
 
     if self.spawn_countdown_active then
         if self.playerready_checkbox.timeout_task ~= nil then
