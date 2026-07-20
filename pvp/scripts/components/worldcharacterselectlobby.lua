@@ -356,7 +356,8 @@ AddUserCommand("forcestartgame", {
 local function CountPlayersReadyToStart()
 	local count = 0
 	for i, v in ipairs(_players_ready_to_start) do
-		if v:value() ~= "" then
+		local value = v:value()
+		if value ~= "" then
 			count = count + 1
 		end
 	end

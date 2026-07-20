@@ -237,11 +237,16 @@ local WaitingForPlayers = Class(Widget, function(self, owner, max_players)
         widget:Disable()
         widget:Refresh()
 
-        UserCommands.RunUserCommand("playerreadytostart", { ready = "true" }, TheNet:GetClientTableForUser(TheNet:GetUserID()))
+        -- [PATCH] 本地乐观更新：点击后立即改变人数显示，不等服务器回包。
+        rawset(_G, "BIRD_LOCAL_READY_OVERRIDE", widget.checked)
+
+        local caller = TheNet:GetClientTableForUser(TheNet:GetUserID())
+        UserCommands.RunUserCommand("playerreadytostart", { ready = "true" }, caller)
         widget.timeout_task = widget.inst:DoTaskInTime(5, function()
             widget.checked = TheWorld.net ~= nil
                 and TheWorld.net.components.worldcharacterselectlobby:IsPlayerReadyToStart(TheNet:GetUserID())
                 or false
+            rawset(_G, "BIRD_LOCAL_READY_OVERRIDE", nil)
             widget:Enable()
             widget:Refresh()
         end)
@@ -256,14 +261,21 @@ local WaitingForPlayers = Class(Widget, function(self, owner, max_players)
     end
 
     self.inst:ListenForEvent("player_ready_to_start_dirty", function(net)
-        if net.components.worldcharacterselectlobby:IsPlayerReadyToStart(TheNet:GetUserID()) == playerready_checkbox.checked then
+        local server_ready = net.components.worldcharacterselectlobby:IsPlayerReadyToStart(TheNet:GetUserID())
+
+        -- [PATCH] 服务器状态与本地一致时清除乐观覆盖，避免人数显示双重计算。
+        if rawget(_G, "BIRD_LOCAL_READY_OVERRIDE") == server_ready then
+            rawset(_G, "BIRD_LOCAL_READY_OVERRIDE", nil)
+        end
+
+        if server_ready == playerready_checkbox.checked then
             if playerready_checkbox.timeout_task ~= nil then
                 playerready_checkbox.timeout_task:Cancel()
                 playerready_checkbox.timeout_task = nil
             end
             playerready_checkbox:Enable()
         elseif playerready_checkbox.timeout_task == nil then
-            playerready_checkbox.checked = net.components.worldcharacterselectlobby:IsPlayerReadyToStart(TheNet:GetUserID())
+            playerready_checkbox.checked = server_ready
             playerready_checkbox:Enable()
             playerready_checkbox:Refresh()
         end
@@ -283,6 +295,12 @@ local WaitingForPlayers = Class(Widget, function(self, owner, max_players)
         self:RefreshPlayersReady()
         self:UpdatePlayerListing()
     end, TheWorld.net)
+
+    -- [PATCH] 队伍数据同步后刷新准备按钮状态，避免首次进入时按钮被错误隐藏。
+    self.inst:ListenForEvent("bird_lobby_teams_dirty", function()
+        self:RefreshPlayersReady()
+        self:UpdatePlayerListing()
+    end, TheGlobalInstance)
 
     self.inst:ListenForEvent("lobbyplayerspawndelay", function(_, data)
         if data and data.active then
@@ -462,8 +480,18 @@ function WaitingForPlayers:RefreshPlayersReady()
         self.playerready_checkbox:Hide()
     else
         -- [PATCH] 等待区/OB 玩家不显示准备按钮，只有红蓝队玩家可准备。
+        -- 优先使用本地已提交的队伍状态（选择后会立即更新），服务器同步数据作为兜底校验，
+        -- 避免首次进入或网络回包前按钮被错误隐藏。
         local local_userid = TheNet ~= nil and TheNet:GetUserID() or nil
-        local local_team = local_userid ~= nil and lobby_team_state.get(local_userid) or TEAM_WAITING
+        local local_team = nil
+        if local_userid ~= nil then
+            local_team = lobby_team_state.normalize(lobby_team_state.get(local_userid))
+            if (local_team == TEAM_WAITING or local_team == TEAM_OBSERVER)
+                and TheWorld.net ~= nil and TheWorld.net._bird_lobby_teams ~= nil then
+                local_team = lobby_team_state.normalize(TheWorld.net._bird_lobby_teams[local_userid])
+            end
+        end
+        local_team = local_team or TEAM_WAITING
         if local_team == TEAM_WAITING or local_team == TEAM_OBSERVER then
             self.playerready_checkbox:Hide()
             self.playerready_checkbox:Disable()

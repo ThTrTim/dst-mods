@@ -265,9 +265,18 @@ local function Install(self)
 
         -- [PATCH] 原版 waitingforplayers 会仅在未连接手柄时显示准备按钮；
         -- 红蓝队玩家强制显示/启用，等待区/OB 玩家隐藏准备按钮。
+        -- 优先使用本地已提交的队伍状态，服务器同步数据作为兜底校验。
         if widget.playerready_checkbox ~= nil and not widget.spawn_countdown_active then
             local local_userid = TheNet ~= nil and TheNet:GetUserID() or nil
-            local local_team = local_userid ~= nil and lobby_team_state.get(local_userid) or TEAM_WAITING
+            local local_team = nil
+            if local_userid ~= nil then
+                local_team = lobby_team_state.normalize(lobby_team_state.get(local_userid))
+                if (local_team == TEAM_WAITING or local_team == TEAM_OBSERVER)
+                    and TheWorld.net ~= nil and TheWorld.net._bird_lobby_teams ~= nil then
+                    local_team = lobby_team_state.normalize(TheWorld.net._bird_lobby_teams[local_userid])
+                end
+            end
+            local_team = local_team or TEAM_WAITING
             if local_team == TEAM_WAITING or local_team == TEAM_OBSERVER then
                 widget.playerready_checkbox:Hide()
                 widget.playerready_checkbox:Disable()
@@ -300,6 +309,11 @@ local function Install(self)
         widget:RefreshPlayersReady()
     end
 
+    -- [PATCH] 队伍数据同步后刷新准备按钮状态，避免首次进入时按钮被错误隐藏。
+    self.inst:ListenForEvent("bird_lobby_teams_dirty", function()
+        widget:RefreshPlayersReady()
+    end, TheGlobalInstance)
+
     -- [PATCH] 原版 waitingforplayers 在人未满时第一次点准备会弹确认窗，
     -- 导致准备不生效。此处替换为直接发送准备命令。
     if self.playerready_checkbox ~= nil then
@@ -308,10 +322,11 @@ local function Install(self)
             widget:Disable()
             widget:Refresh()
 
+            local caller = TheNet:GetClientTableForUser(TheNet:GetUserID())
             UserCommands.RunUserCommand(
                 "playerreadytostart",
                 { ready = "true" },
-                TheNet:GetClientTableForUser(TheNet:GetUserID())
+                caller
             )
 
             widget.timeout_task = widget.inst:DoTaskInTime(5, function()

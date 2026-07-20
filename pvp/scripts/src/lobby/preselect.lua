@@ -2,6 +2,14 @@ local UserCommands = require "usercommands"
 local Widget = require "widgets/widget"
 local lobby_team_state = require "src/team/lobby_team_state"
 
+-- [PATCH] 本地乐观准备状态：玩家点击准备/取消后立即更新人数，不等服务器回包。
+-- 由 shuiyue_preselect_panel.lua 在点击时写入，服务器状态同步后清 nil。
+rawset(_G, "BIRD_LOCAL_READY_OVERRIDE", nil)
+
+local function GetLocalReadyOverride()
+    return rawget(_G, "BIRD_LOCAL_READY_OVERRIDE")
+end
+
 local function IsRegularLobby()
     return TheNet ~= nil and TheNet:GetServerGameMode() == "survival"
 end
@@ -233,7 +241,23 @@ local function WrapLoadoutPanel(panel_def)
 end
 
 local function GetReadyCount(lobby)
-    return lobby ~= nil and lobby.CountPlayersReadyToStart ~= nil and lobby:CountPlayersReadyToStart() or 0
+    local count = lobby ~= nil and lobby.CountPlayersReadyToStart ~= nil and lobby:CountPlayersReadyToStart() or 0
+
+    -- [PATCH] 服务器回包有延迟时，用本地乐观状态修正人数，保证点击后立即加减。
+    local override = GetLocalReadyOverride()
+    if override ~= nil and lobby ~= nil and lobby.IsPlayerReadyToStart ~= nil then
+        local local_userid = TheNet ~= nil and TheNet:GetUserID() or nil
+        if local_userid ~= nil then
+            local server_ready = lobby:IsPlayerReadyToStart(local_userid)
+            if override and not server_ready then
+                count = count + 1
+            elseif not override and server_ready then
+                count = math.max(0, count - 1)
+            end
+        end
+    end
+
+    return count
 end
 
 local function CountTeamPlayers()
@@ -323,6 +347,13 @@ local function BuildPreselectPanel(owner)
             self.on_character_reset_cb(self)
         end
         panel:Refresh()
+
+        -- [PATCH] 保险：每帧刷新标题人数，避免 net dirty 事件未触发导致显示不更新。
+        local title = GetWaitingTitle()
+        if wrapper.title ~= title then
+            wrapper.title = title
+            panel:SetTitle(title)
+        end
     end
 
     function wrapper:OnBackButton()
