@@ -25,3 +25,13 @@ PVP 维护入口:
 - [排错手册](docs/pvp/troubleshooting.md)
 
 新增其他 MOD 文档时，使用 `docs/<mod目录名>/README.md` 作为入口，并在上表登记。
+
+## 准备与开局
+
+本次对 PVP 选人准备与开局逻辑的优化，相关代码位于 `pvp/scripts/components/worldcharacterselectlobby.lua`、`pvp/scripts/src/lobby/preselect.lua` 与 `pvp/scripts/widgets/` 并带有 `[PATCH]` 注释。
+
+- 等待区 / OB 玩家不显示准备按钮，不参与准备统计。
+- 标题“正在等待其他玩家 (x/y)”中的总人数只统计红蓝队玩家。
+- 开局条件改为红蓝队全部玩家准备好才开始，等待区 / OB 不影响开局。
+- 修复准备按钮因手柄连接被隐藏的问题。
+- 修复原版 waitingforplayers 在人未满时弹确认窗导致准备不生效的问题。

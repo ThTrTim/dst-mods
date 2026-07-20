@@ -2,6 +2,8 @@
 --[[ WorldCharacterSelectLobby class definition ]]
 --------------------------------------------------------------------------
 
+local lobby_team_state = require "src/team/lobby_team_state"
+
 return Class(function(self, inst)
 
 --------------------------------------------------------------------------
@@ -361,6 +363,23 @@ local function CountPlayersReadyToStart()
 	return count
 end
 
+local function CountTeamPlayers()
+	local clients = GetPlayersClientTable()
+	local teams = TheWorld.net ~= nil and TheWorld.net._bird_lobby_teams or nil
+	if teams == nil then
+		return #clients
+	end
+
+	local count = 0
+	for _, client in ipairs(clients) do
+		local team = lobby_team_state.normalize(teams[client.userid])
+		if team == lobby_team_state.TEAM_RED or team == lobby_team_state.TEAM_BLUE then
+			count = count + 1
+		end
+	end
+	return count
+end
+
 local function TryStartCountdown()
 	if not self:IsAllowingCharacterSelect() then
 		return
@@ -369,8 +388,10 @@ local function TryStartCountdown()
 -- case
 	local modeActions = {
 		["ALL"] = function()
-			local clients = GetPlayersClientTable()
-			if CountPlayersReadyToStart() < #clients or CountPlayersReadyToStart() < self.MIN_PLAYERS then
+			local team_players = CountTeamPlayers()
+			local ready = CountPlayersReadyToStart()
+			-- [PATCH] 只统计参与游戏的红蓝队玩家，等待区/OB 不强制准备。
+			if ready < team_players or ready < self.MIN_PLAYERS then
 				return
 			end
 			StarTimer(COUNTDOWN_TIME)

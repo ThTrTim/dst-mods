@@ -1,5 +1,6 @@
 local UserCommands = require "usercommands"
 local Widget = require "widgets/widget"
+local lobby_team_state = require "src/team/lobby_team_state"
 
 local function IsRegularLobby()
     return TheNet ~= nil and TheNet:GetServerGameMode() == "survival"
@@ -235,6 +236,25 @@ local function GetReadyCount(lobby)
     return lobby ~= nil and lobby.CountPlayersReadyToStart ~= nil and lobby:CountPlayersReadyToStart() or 0
 end
 
+local function CountTeamPlayers()
+    local clients = TheNet:GetClientTable() or {}
+    local teams = TheWorld.net ~= nil and TheWorld.net._bird_lobby_teams or nil
+    if teams == nil then
+        return #clients
+    end
+
+    local count = 0
+    for _, client in ipairs(clients) do
+        if client.userid ~= nil and client.userid ~= "" then
+            local team = lobby_team_state.normalize(teams[client.userid])
+            if team == lobby_team_state.TEAM_RED or team == lobby_team_state.TEAM_BLUE then
+                count = count + 1
+            end
+        end
+    end
+    return count
+end
+
 local function GetWaitingTitle()
     local lobby = GetWorldLobby()
     if lobby == nil then
@@ -244,10 +264,11 @@ local function GetWaitingTitle()
     local mode = lobby.ADMIN_MODE
     local ready_count = GetReadyCount(lobby)
     local min_players = lobby.MIN_PLAYERS or 2
-    local player_count = TheNet:GetPlayerCount()
 
     if mode == "ALL" then
-        return STRINGS.UI.LOBBYSCREEN.WAITING_FOR_PLAYERS_TITLE.." ("..subfmt(STRINGS.UI.LOBBYSCREEN.NUM_PLAYERS_FMT, { num = ready_count, max = math.max(min_players, player_count) })..")"
+        -- [PATCH] 标题人数只统计参与游戏的红蓝队玩家，等待区/OB 不计入。
+        local team_players = CountTeamPlayers()
+        return STRINGS.UI.LOBBYSCREEN.WAITING_FOR_PLAYERS_TITLE.." ("..subfmt(STRINGS.UI.LOBBYSCREEN.NUM_PLAYERS_FMT, { num = ready_count, max = math.max(min_players, team_players) })..")"
     elseif mode == "MIN" then
         return STRINGS.UI.LOBBYSCREEN.WAITING_FOR_PLAYERS_TITLE.." ("..subfmt(STRINGS.UI.LOBBYSCREEN.NUM_PLAYERS_FMT, { num = ready_count, max = min_players })..")"
     elseif mode == "ADMIN" then
@@ -272,6 +293,12 @@ local function BuildPreselectPanel(owner)
     wrapper.waiting_for_players = panel
     wrapper.focus_forward = panel
     wrapper.title = GetWaitingTitle()
+    panel:SetTitle(wrapper.title)
+
+    -- [PATCH] 隐藏原版 LobbyScreen 顶部偏左的标题，由自定义面板在红蓝队中间显示。
+    if owner ~= nil and owner.panel_title ~= nil then
+        owner.panel_title:Hide()
+    end
 
     local lobby = GetWorldLobby()
     if lobby ~= nil and lobby.ADMIN_MODE == "ADMIN" and CanAdminStart() then
@@ -280,9 +307,8 @@ local function BuildPreselectPanel(owner)
 
     panel.inst:ListenForEvent("player_ready_to_start_dirty", function()
         wrapper.title = GetWaitingTitle()
-        if owner.panel_title ~= nil then
-            owner.panel_title:SetString(wrapper.title)
-        end
+        -- [PATCH] 标题改由自定义面板的中央标题显示，不再依赖原版的 panel_title。
+        panel:SetTitle(wrapper.title)
     end, TheWorld.net)
 
     function wrapper:OnNextButton()
